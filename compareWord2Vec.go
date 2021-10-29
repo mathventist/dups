@@ -21,7 +21,6 @@ type matchGroup struct {
 
 func w2v() {
 	var removeStops bool
-	var modelFileName string
 	var score float64
 
 	flags := flag.NewFlagSet("w2v", flag.ExitOnError)
@@ -29,30 +28,28 @@ func w2v() {
 	flags.BoolVar(&removeStops, "removeStops", true, "remove stop words from text")
 	flags.Float64Var(&score, "s", float64(0.5), "minimum score for which matches will be reported")
 	flags.Float64Var(&score, "score", float64(0.5), "minimum score for which matches will be reported")
-	flags.StringVar(&modelFileName, "m", "", "word2vec model filename")
-	flags.StringVar(&modelFileName, "model", "", "word2vec model filename")
 
 	flags.Usage = func() {
+        usageText := `usage: dups w2v [ -h | --help ] [ -r | --removeStops ] [ -s <score> | --score <score>] <Word2Vec model file> <file A> <file B>
+
+        -h, --help            print the help message
+        -r, --removeStops     remove English stop words from the text
+        -s, --score <score>   only return matches greater or equal to this value between 0 and 1`
+
+        fmt.Println(usageText)
 	}
 
 	flags.Parse(os.Args[2:])
 	args := flags.Args()
 
-	if flags.NArg() != 2 {
-		fmt.Fprintln(os.Stderr, "invalid number of arguments; please provide two input file names.")
+	if flags.NArg() != 3 {
+		fmt.Fprintln(os.Stderr, "invalid number of arguments; please provide the Word2Vec model file, followed by two input file names.")
 		flags.Usage()
 
 		os.Exit(1)
 	}
 
-	if modelFileName == "" {
-		fmt.Fprintln(os.Stderr, "must provide filename of word2vec model.")
-		flag.Usage()
-
-		os.Exit(1)
-	}
-
-	fileName1, fileName2 := args[0], args[1]
+	modelFileName, fileName1, fileName2 := args[0], args[1], args[3]
 
 	c := populateSliceFromFile(fileName1)
 	d := populateSliceFromFile(fileName2)

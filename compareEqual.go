@@ -13,26 +13,15 @@ import (
 func eq() {
 	var removeStops bool
 
-	flags := flag.NewFlagSet("w2v", flag.ExitOnError)
+	flags := flag.NewFlagSet("eq", flag.ExitOnError)
 	flags.BoolVar(&removeStops, "r", true, "remove stop words from text")
 	flags.BoolVar(&removeStops, "removeStops", true, "remove stop words from text")
 
 	flags.Usage = func() {
-		usageText := `compareEqual - a utility for finding matching sentences in two files.
+		usageText := `usage: dups eq [ -h | --help ] [ -r | --removeStops ] <file A> <file B>
 
-It uses the duplicate package's Preprocess method to normalize the text before comparing.
-
-USAGE
-  $ dups eq [ -h | --help ] [ -r | --removeStops ] FILE1 FILE2
-
-OPTIONS
-  -r, --removeStops  remove stop words from the text
-  -h, --help         print the help message
-
-EXAMPLES
-
-  $ dups eq -r myfile1 myfile2
-  `
+    -r, --removeStops  remove stop words from the text
+    -h, --help         print the help message`
 
 		fmt.Println(usageText)
 	}

@@ -54,26 +54,11 @@ func str2ngrams() {
 	flags.IntVar(&ngramSize, "size", 3, "size of the ngrams")
 
 	flags.Usage = func() {
-		usageText := `str2ngrams - a utility for generating unique ngrams for text input.
+		usageText := `usage: dups str2n [ -h | --help ] [ -s <ngram size> | --size <ngram size> ] [ -f <filename> | --file <filename> ]
 
-Given text input, this utility generates the unique ngrams of the desired size, and outputs one ngram per line.
-
-USAGE
-  $ str2ngrams [ -h | --help ] [ -s <ngram size> | --size <ngram size> ] [ -f <filename> | --file <filename> ]
-
-OPTIONS
-  -f, --file  input filename. Standard input when omitted
-  -s, --size  size of the desired ngrams, default value is 3
-  -h, --help  print the help message
-
-EXAMPLES
-  $ echo "here is the text" | str2ngrams -s 2
-  here is
-  is the
-  the text
-
-  $ str2ngrams -f myfile
-  `
+    -f, --file <filename>     input filename, standard input when omitted
+    -s, --size <ngram size>   size of the desired ngrams, default value is 3
+    -h, --help                print the help message`
 
 		fmt.Println(usageText)
 	}

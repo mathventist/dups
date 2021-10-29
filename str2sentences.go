@@ -18,28 +18,10 @@ func str2sentences() {
 	flags.StringVar(&fileName, "file", "", "input filename")
 
 	flags.Usage = func() {
-		usageText := `str2sentences - a utility for splitting strings into sentences.
+		usageText := `usage: dups str2s [ -h | --help ] [ -f <filename> | --file <filename> ]
 
-Given text input, this outputs the text back, reformated into one sentence per line.
-
-It uses the characters .!? as markers for the end of a sentence. It also handles sentences that end in quotations, by including the end quotation mark as part of the sentence when the quotation mark immediately follows the end of a sentence.
-
-Furthermore, it recognizes that period characters appearing in abbreviations, such as "Mrs." or "St.", do not mark the end of sentences.
-
-USAGE
-  $ str2sentences [ -h | --help ] [ -f <filename> | --file <filename> ]
-
-OPTIONS
-  -f, --file         input filename. Standard input when omitted
-  -h, --help         print the help message
-
-EXAMPLES
-  $ echo "Sentence one.     sentence, two!" | str2sentences
-  Sentence one.
-  sentence, two!
-
-  $ str2sentences -f myfile
-  `
+    -f, --file <filename>   input filename, standard input when omitted
+    -h, --help              print the help message`
 
 		fmt.Println(usageText)
 	}

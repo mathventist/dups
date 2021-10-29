@@ -13,14 +13,33 @@ import (
 func main() {
 
 	flag.Usage = func() {
-		usageText := `usage: dups [-v | --version] [-h | --help] <command> [<args>]`
+		usageText := `usage: dups [-v | --version] [-h | --help] <command> [<args>]
+
+The following commands are available:
+
+Transform text for further comparison operations
+	norm		Normalize text by removing undesirable characters or words, and by converting all text to lowercase
+	str2n		Convert text into ngrams
+	str2s		Split text up into sentences
+
+
+Compare two sets of ngrams
+	con		Return the containment score of one set of ngrams within another
+	res		Return the similarity score of two sets of ngrams
+
+
+Compare text
+	eq		Find equal sentences in two files
+	w2v		Use Word2Vec to find similar sentences in two files
+
+See 'dups <command> -h' or 'dups <command> --help' for further help with a specific command.
+`
 		fmt.Println(usageText)
 	}
 
 	flag.Parse()
 
 	if len(os.Args) < 2 {
-		fmt.Fprintln(os.Stderr, "invalid number of arguments; please provide two file names.")
 		flag.Usage()
 		os.Exit(1)
 	}
@@ -40,6 +59,8 @@ func main() {
 		str2ngrams()
 	case "str2s":
 		str2sentences()
+	default:
+		flag.Usage()
 	}
 
 }

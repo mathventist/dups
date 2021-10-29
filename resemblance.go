@@ -12,26 +12,18 @@ func resemblance() {
 	flags := flag.NewFlagSet("resemblance", flag.ExitOnError)
 
 	flags.Usage = func() {
-		usageText := `resemblance - a utility for computing the resemblance of one document within another.
+		usageText := `usage: dups res [ -h | --help ] <file A> <file B>
+
+    -h, --help  print the help message
 
 Given two documents A and B, and the sets of ngrams (for equal n) for each, S(A) and S(B), the resemblance R(A,B) of documents A and B is defined as:
 
-  R(A,B) = |S(A) ∩ S(B)| / |S(A) ∪ S(B)|
+    R(A,B) = |S(A) ∩ S(B)| / |S(A) ∪ S(B)|
 
 Input files must each contain a single ngram per line, and the ngrams must all be the same size for an accurate calculation.
 
-The output is a floating point value, greater or equal to 0.0 and less than or equal to 1.0. A value of 1.0 indicates complete resemblance.
+The output is a floating point value, greater or equal to 0.0 and less than or equal to 1.0. A value of 1.0 indicates complete resemblance.`
 
-USAGE
-  $ resemblance [ -h | --help ] <file A> <file B>
-
-OPTIONS
-  -h, --help  print the help message
-
-EXAMPLES
-  $ resemblance fileA fileB
-  0.3
-  `
 		fmt.Println(usageText)
 	}
 
