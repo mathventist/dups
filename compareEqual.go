@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"sync"
 	"text/tabwriter"
 
 	"github.com/mathventist/duplicates"
@@ -42,7 +43,22 @@ func eq() {
 	d := populateSliceFromFile(fileName2)
 
 	a, b := <-c, <-d
-	results := compare(a, b, fileName1, fileName2, removeStops)
+	r := compare(a, b, fileName1, fileName2, removeStops)
+
+    var results []result
+
+	for i, n := range r {
+        for j, m := range n {
+            if m.aString != "" && m.bString != "" {
+                s := result{
+                    aIndex:  i,
+                    bIndex: j,
+                    match: m,
+                }
+                results = append(results, s)
+            }
+        }
+	}
 
 	// Display result summary
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
@@ -53,43 +69,76 @@ func eq() {
 
 	// Display full results
 	fmt.Printf("\n\n%v matched sentences.\n\n", len(results))
-	for _, r := range results {
-		fmt.Fprintf(os.Stdout, "%v sentence number %v\n\n\t%v\n\nmatched to %v sentence number %v\n\n\t%v\n\n",
-			fileName1, r[0].Index+1, r[0].String,
-			fileName2, r[1].Index+1, r[1].String,
-		)
-	}
+    for _, t := range results {
+        fmt.Fprintf(os.Stdout, "%v sentence number %v\n\n\t%v\n\nmatched to %v sentence number %v\n\n\t%v\n\n",
+            fileName1, t.aIndex, t.match.aString,
+            fileName2, t.bIndex, t.match.bString,
+        )
+    }
 }
 
-type indexedString struct {
-	Index  int
-	String string
+type result struct {
+    aIndex int
+    bIndex int
+    match matchedStrings
 }
 
-func compare(a []string, b []string, fileName1 string, fileName2 string, removeStops bool) [][2]indexedString {
+type matchedStrings struct {
+	aString string
+	bString string
+}
+
+type indexedStrings struct {
+    matches [][]matchedStrings
+    mu sync.Mutex
+}
+
+func (s *indexedStrings) Add(i, j int, a, b string) {
+    s.mu.Lock()
+    s.matches[i][j] = matchedStrings{
+        aString: a,
+        bString: b,
+    }
+    s.mu.Unlock()
+}
+
+func compare(a []string, b []string, fileName1 string, fileName2 string, removeStops bool) [][]matchedStrings {
 	ca := preprocessEq(a, fileName1, removeStops)
 	cb := preprocessEq(b, fileName2, removeStops)
 
 	la, lb := <-ca, <-cb
 
-	var results [][2]indexedString
+    m := make([][]matchedStrings, len(a))
+    for n := 0; n < len(a); n++ {
+        m[n] = make([]matchedStrings, len(b))
+    }
+    results := indexedStrings{
+        matches: m,
+    }
+
 	bar := progressbar.Default(int64(len(a)*len(b)), "comparing files...")
 
 	// TODO: improve performance by using goroutines to run comparisons concurrently.
+    var wg  sync.WaitGroup
+
 	for i, aa := range la {
 		for j, bb := range lb {
-			bar.Add(1)
-			if aa == bb {
-				var match [2]indexedString
-				match[0] = indexedString{i, a[i]}
-				match[1] = indexedString{j, b[j]}
+            wg.Add(1)
 
-				results = append(results, match)
-			}
+            go func(aString, bString string, i, j int) {
+                defer wg.Done()
+
+                if aString == bString {
+                    results.Add(i, j, a[i], b[j])
+                }
+                bar.Add(1)
+            }(aa, bb, i, j)
 		}
 	}
 
-	return results
+    wg.Wait()
+
+	return results.matches
 }
 
 func preprocessEq(a []string, fileName string, removeStops bool) <-chan []string {
