@@ -49,7 +49,7 @@ func eq() {
 
 	for i, n := range r {
         for j, m := range n {
-            if m.aString != "" && m.bString != "" {
+            if m.score == 1 {
                 s := result{
                     aIndex:  i,
                     bIndex: j,
@@ -86,6 +86,7 @@ type result struct {
 type matchedStrings struct {
 	aString string
 	bString string
+    score float64
 }
 
 type indexedStrings struct {
@@ -93,16 +94,17 @@ type indexedStrings struct {
     mu sync.Mutex
 }
 
-func (s *indexedStrings) Add(i, j int, a, b string) {
+func (s *indexedStrings) Add(i, j int, a, b string, score float64) {
     s.mu.Lock()
     s.matches[i][j] = matchedStrings{
         aString: a,
         bString: b,
+        score: score,
     }
     s.mu.Unlock()
 }
 
-func compare(a []string, b []string, fileName1 string, fileName2 string, removeStops bool) [][]matchedStrings {
+func compare(a, b []string, fileName1, fileName2 string, removeStops bool) [][]matchedStrings {
 	ca := preprocessEq(a, fileName1, removeStops)
 	cb := preprocessEq(b, fileName2, removeStops)
 
@@ -128,9 +130,12 @@ func compare(a []string, b []string, fileName1 string, fileName2 string, removeS
             go func(aString, bString string, i, j int) {
                 defer wg.Done()
 
+                score := float64(0)
                 if aString == bString {
-                    results.Add(i, j, a[i], b[j])
+                    score = float64(1)
                 }
+                results.Add(i, j, a[i], b[j], score)
+
                 bar.Add(1)
             }(aa, bb, i, j)
 		}
