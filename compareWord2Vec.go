@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"sync"
 
 	"code.sajari.com/word2vec"
 	"github.com/mathventist/duplicates"
@@ -11,6 +12,7 @@ import (
 )
 
 var origToNorm = make(map[string]string)
+var model *word2vec.Model
 
 type matchGroup struct {
 	A        string
@@ -30,13 +32,13 @@ func w2v() {
 	flags.Float64Var(&score, "score", float64(0.5), "minimum score for which matches will be reported")
 
 	flags.Usage = func() {
-        usageText := `usage: dups w2v [ -h | --help ] [ -r | --removeStops ] [ -s <score> | --score <score>] <Word2Vec model file> <file A> <file B>
+		usageText := `usage: dups w2v [ -h | --help ] [ -r | --removeStops ] [ -s <score> | --score <score>] <Word2Vec model file> <file A> <file B>
 
         -h, --help            print the help message
         -r, --removeStops     remove English stop words from the text
         -s, --score <score>   only return matches greater or equal to this value between 0 and 1`
 
-        fmt.Println(usageText)
+		fmt.Println(usageText)
 	}
 
 	flags.Parse(os.Args[2:])
@@ -49,7 +51,7 @@ func w2v() {
 		os.Exit(1)
 	}
 
-	modelFileName, fileName1, fileName2 := args[0], args[1], args[3]
+	modelFileName, fileName1, fileName2 := args[0], args[1], args[2]
 
 	c := populateSliceFromFile(fileName1)
 	d := populateSliceFromFile(fileName2)
@@ -58,82 +60,75 @@ func w2v() {
 
 	// Load word2vec model
 	// Ex: curl -O https://s3.amazonaws.com/dl4j-distribution/GoogleNews-vectors-negative300.bin.gz
-	r, err := os.Open(modelFileName)
+	f, err := os.Open(modelFileName)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error opening %s: %v\n", modelFileName, err)
 		os.Exit(1)
 	}
-	defer r.Close()
+	defer f.Close()
 
-	model, err := word2vec.FromReader(r)
+	model, err = word2vec.FromReader(f)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error loading word2vec model: %v\n", err)
 		os.Exit(1)
 	}
 
-	matches := w2vCompare(a, b, fileName1, fileName2, model, removeStops, score)
-	for _, m := range matches {
-		fmt.Println(m.A)
-		fmt.Println(m.B)
-		fmt.Println(m.NotFound)
-		fmt.Println(m.Score)
+	r := w2vCompare(a, b, fileName1, fileName2, removeStops)
 
+	var results []result
+
+	for i, n := range r {
+		for j, m := range n {
+			if m.score >= score {
+				s := result{
+					aIndex: i,
+					bIndex: j,
+					match:  m,
+				}
+				results = append(results, s)
+			}
+		}
 	}
 
+	fmt.Printf("%v\n", results)
 }
 
-func w2vCompare(a, b []string, fileName1, fileName2 string, model *word2vec.Model, removeStops bool, score float64) []matchGroup {
+func w2vCompare(a, b []string, fileName1, fileName2 string, removeStops bool) [][]matchedStrings {
+	ca := preprocess(a, fileName1, removeStops)
+	cb := preprocess(b, fileName2, removeStops)
+
+	la, lb := <-ca, <-cb
+
+	results := newIndexedStrings(len(a), len(b))
+
 	bar := progressbar.Default(int64(len(a)*len(b)), "comparing files...")
 
-	matches := []matchGroup{}
+	var wg sync.WaitGroup
 
-	for _, aa := range a {
-		na := preprocess(aa, removeStops)
-		if len(na) == 0 {
+	for i, aa := range la {
+		if len(aa.processed) == 0 {
+			bar.Add(len(lb))
 			continue
 		}
 
-		for _, bb := range b {
-			nb := preprocess(bb, removeStops)
-			if len(nb) == 0 {
+		for j, bb := range lb {
+			if len(bb.processed) == 0 {
+				bar.Add(1)
 				continue
 			}
 
-			normalizedScore, notFound := duplicates.CompareWord2Vec(na, nb, model)
+			wg.Add(1)
 
-			if float64(normalizedScore) >= score {
-				match := matchGroup{
-					A:        aa,
-					B:        bb,
-					Score:    normalizedScore,
-					NotFound: notFound,
-				}
-				matches = append(matches, match)
-			}
-			bar.Add(1)
+			go func(aString, bString stringPair, i, j int) {
+				defer wg.Done()
+
+				normalizedScore, _ := duplicates.CompareWord2Vec(aString.processed, bString.processed, model)
+				results.Add(i, j, aString.original, bString.original, float64(normalizedScore))
+
+				bar.Add(1)
+			}(aa, bb, i, j)
 		}
 	}
 
-	return matches
-}
-
-func preprocess(a string, removeStops bool) string {
-	if len(a) == 0 {
-		return a
-	}
-
-	// Check cache of preprocessed text first
-	if val, ok := origToNorm[a]; ok {
-		return val
-	}
-
-	normalizedText := duplicates.Preprocess(a, removeStops)
-
-	// trim trailing punctuation
-	if isSentenceTerminator(normalizedText[len(normalizedText)-1]) {
-		normalizedText = normalizedText[:len(normalizedText)-1]
-	}
-	origToNorm[a] = normalizedText
-
-	return normalizedText
+	return results.matches
 }

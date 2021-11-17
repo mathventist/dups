@@ -45,19 +45,19 @@ func eq() {
 	a, b := <-c, <-d
 	r := compare(a, b, fileName1, fileName2, removeStops)
 
-    var results []result
+	var results []result
 
 	for i, n := range r {
-        for j, m := range n {
-            if m.score == 1 {
-                s := result{
-                    aIndex:  i,
-                    bIndex: j,
-                    match: m,
-                }
-                results = append(results, s)
-            }
-        }
+		for j, m := range n {
+			if m.score == 1 {
+				s := result{
+					aIndex: i,
+					bIndex: j,
+					match:  m,
+				}
+				results = append(results, s)
+			}
+		}
 	}
 
 	// Display result summary
@@ -69,88 +69,106 @@ func eq() {
 
 	// Display full results
 	fmt.Printf("\n\n%v matched sentences.\n\n", len(results))
-    for _, t := range results {
-        fmt.Fprintf(os.Stdout, "%v sentence number %v\n\n\t%v\n\nmatched to %v sentence number %v\n\n\t%v\n\n",
-            fileName1, t.aIndex, t.match.aString,
-            fileName2, t.bIndex, t.match.bString,
-        )
-    }
+	for _, t := range results {
+		fmt.Fprintf(os.Stdout, "%v sentence number %v\n\n\t%v\n\nmatched to %v sentence number %v\n\n\t%v\n\n",
+			fileName1, t.aIndex, t.match.aString,
+			fileName2, t.bIndex, t.match.bString,
+		)
+	}
+}
+
+type stringPair struct {
+	original  string
+	processed string
 }
 
 type result struct {
-    aIndex int
-    bIndex int
-    match matchedStrings
+	aIndex int
+	bIndex int
+	match  matchedStrings
 }
 
 type matchedStrings struct {
 	aString string
 	bString string
-    score float64
+	score   float64
 }
 
 type indexedStrings struct {
-    matches [][]matchedStrings
-    mu sync.Mutex
+	matches [][]matchedStrings
+	mu      sync.Mutex
 }
 
 func (s *indexedStrings) Add(i, j int, a, b string, score float64) {
-    s.mu.Lock()
-    s.matches[i][j] = matchedStrings{
-        aString: a,
-        bString: b,
-        score: score,
-    }
-    s.mu.Unlock()
+	s.mu.Lock()
+	s.matches[i][j] = matchedStrings{
+		aString: a,
+		bString: b,
+		score:   score,
+	}
+	s.mu.Unlock()
+}
+
+func newIndexedStrings(i, j int) indexedStrings {
+	m := make([][]matchedStrings, i)
+	for n := 0; n < i; n++ {
+		m[n] = make([]matchedStrings, j)
+	}
+	return indexedStrings{
+		matches: m,
+	}
 }
 
 func compare(a, b []string, fileName1, fileName2 string, removeStops bool) [][]matchedStrings {
-	ca := preprocessEq(a, fileName1, removeStops)
-	cb := preprocessEq(b, fileName2, removeStops)
+	ca := preprocess(a, fileName1, removeStops)
+	cb := preprocess(b, fileName2, removeStops)
 
 	la, lb := <-ca, <-cb
 
-    m := make([][]matchedStrings, len(a))
-    for n := 0; n < len(a); n++ {
-        m[n] = make([]matchedStrings, len(b))
-    }
-    results := indexedStrings{
-        matches: m,
-    }
+	results := newIndexedStrings(len(a), len(b))
 
 	bar := progressbar.Default(int64(len(a)*len(b)), "comparing files...")
 
-	// TODO: improve performance by using goroutines to run comparisons concurrently.
-    var wg  sync.WaitGroup
+	var wg sync.WaitGroup
 
 	for i, aa := range la {
+		if len(aa.processed) == 0 {
+			bar.Add(len(lb))
+			continue
+		}
+
 		for j, bb := range lb {
-            wg.Add(1)
+			if len(bb.processed) == 0 {
+				bar.Add(1)
+				continue
+			}
 
-            go func(aString, bString string, i, j int) {
-                defer wg.Done()
+			wg.Add(1)
 
-                score := float64(0)
-                if aString == bString {
-                    score = float64(1)
-                }
-                results.Add(i, j, a[i], b[j], score)
+			go func(aString, bString stringPair, i, j int) {
+				defer wg.Done()
 
-                bar.Add(1)
-            }(aa, bb, i, j)
+				score := float64(0)
+				if aString.processed == bString.processed {
+					score = float64(1)
+				}
+				results.Add(i, j, aString.original, bString.original, score)
+
+				bar.Add(1)
+			}(aa, bb, i, j)
 		}
 	}
 
-    wg.Wait()
+	wg.Wait()
 
 	return results.matches
 }
 
-func preprocessEq(a []string, fileName string, removeStops bool) <-chan []string {
-	c := make(chan []string)
+func preprocess(a []string, fileName string, removeStops bool) <-chan []stringPair {
+	c := make(chan []stringPair)
 
 	go func() {
-		var r []string
+		var r []stringPair
 		bar := progressbar.Default(int64(len(a)), "preprocessing "+fileName+"...")
 
 		for _, aa := range a {
@@ -162,7 +180,7 @@ func preprocessEq(a []string, fileName string, removeStops bool) <-chan []string
 				normalizedText = normalizedText[:len(normalizedText)-1]
 			}
 
-			r = append(r, normalizedText)
+			r = append(r, stringPair{aa, normalizedText})
 		}
 		c <- r
 	}()
