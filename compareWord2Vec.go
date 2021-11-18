@@ -11,7 +11,6 @@ import (
 	"github.com/schollz/progressbar/v3"
 )
 
-var origToNorm = make(map[string]string)
 var model *word2vec.Model
 
 type matchGroup struct {

@@ -7,7 +7,6 @@ import (
 	"sync"
 	"text/tabwriter"
 
-	"github.com/mathventist/duplicates"
 	"github.com/schollz/progressbar/v3"
 )
 
@@ -60,62 +59,25 @@ func eq() {
 		}
 	}
 
-	// Display result summary
-	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(w, "File\tNumber of sentences\tPercentage of matched sentences")
-	fmt.Fprintf(w, "%v\t%v\t%v\n", fileName1, len(a), 100*len(results)/len(a))
-	fmt.Fprintf(w, "%v\t%v\t%v\n", fileName2, len(b), 100*len(results)/len(b))
-	w.Flush()
+	if len(results) == 0 {
+		fmt.Println("No duplicate sentences found.")
+	} else {
 
-	// Display full results
-	fmt.Printf("\n\n%v matched sentences.\n\n", len(results))
-	for _, t := range results {
-		fmt.Fprintf(os.Stdout, "%v sentence number %v\n\n\t%v\n\nmatched to %v sentence number %v\n\n\t%v\n\n",
-			fileName1, t.aIndex, t.match.aString,
-			fileName2, t.bIndex, t.match.bString,
-		)
-	}
-}
+		// Display result summary
+		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+		fmt.Fprintln(w, "File\tNumber of sentences\tPercentage of matched sentences")
+		fmt.Fprintf(w, "%v\t%v\t%v\n", fileName1, len(a), 100*len(results)/len(a))
+		fmt.Fprintf(w, "%v\t%v\t%v\n", fileName2, len(b), 100*len(results)/len(b))
+		w.Flush()
 
-type stringPair struct {
-	original  string
-	processed string
-}
-
-type result struct {
-	aIndex int
-	bIndex int
-	match  matchedStrings
-}
-
-type matchedStrings struct {
-	aString string
-	bString string
-	score   float64
-}
-
-type indexedStrings struct {
-	matches [][]matchedStrings
-	mu      sync.Mutex
-}
-
-func (s *indexedStrings) Add(i, j int, a, b string, score float64) {
-	s.mu.Lock()
-	s.matches[i][j] = matchedStrings{
-		aString: a,
-		bString: b,
-		score:   score,
-	}
-	s.mu.Unlock()
-}
-
-func newIndexedStrings(i, j int) indexedStrings {
-	m := make([][]matchedStrings, i)
-	for n := 0; n < i; n++ {
-		m[n] = make([]matchedStrings, j)
-	}
-	return indexedStrings{
-		matches: m,
+		// Display full results
+		fmt.Printf("\n\n%v matched sentences.\n\n", len(results))
+		for _, t := range results {
+			fmt.Fprintf(os.Stdout, "%v sentence number %v\n\n\t%v\n\nmatched to %v sentence number %v\n\n\t%v\n\n",
+				fileName1, t.aIndex, t.match.aString,
+				fileName2, t.bIndex, t.match.bString,
+			)
+		}
 	}
 }
 
@@ -162,28 +124,4 @@ func compare(a, b []string, fileName1, fileName2 string, removeStops bool) [][]m
 	wg.Wait()
 
 	return results.matches
-}
-
-func preprocess(a []string, fileName string, removeStops bool) <-chan []stringPair {
-	c := make(chan []stringPair)
-
-	go func() {
-		var r []stringPair
-		bar := progressbar.Default(int64(len(a)), "preprocessing "+fileName+"...")
-
-		for _, aa := range a {
-			bar.Add(1)
-			normalizedText := duplicates.Preprocess(aa, removeStops)
-
-			// trim trailing punctuation
-			if isSentenceTerminator(normalizedText[len(normalizedText)-1]) {
-				normalizedText = normalizedText[:len(normalizedText)-1]
-			}
-
-			r = append(r, stringPair{aa, normalizedText})
-		}
-		c <- r
-	}()
-
-	return c
 }
